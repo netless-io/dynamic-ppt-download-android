@@ -6,55 +6,65 @@ import java.util.ArrayList;
  * @author fenglibin
  */
 class ResourceState {
+    private static final int RETRY_TIME = 3;
+
     private static final int STATE_DOWNLOADING = 0;
     private static final int STATE_DONE = 1;
     private static final int STATE_FAIL = 2;
     private final int size;
+    /**
+     * 成功或者失败3次计数
+     */
     private int doneSize;
+    /**
+     * 下一个资源索引
+     */
     private int next = 0;
 
-    private ArrayList<Item> list;
+    private ArrayList<ResourceItem> resourceItems;
 
     ResourceState(int size) {
         this.size = size;
-        this.doneSize = 0;
 
-        list = new ArrayList<>(size);
+        resourceItems = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            list.add(new Item());
+            resourceItems.add(new ResourceItem());
         }
     }
 
     void markDone(int index) {
-        Item item = list.get(index);
+        ResourceItem item = resourceItems.get(index);
         item.state = STATE_DONE;
-        doneSize--;
+        doneSize++;
     }
 
     void markFail(int index) {
-        Item item = list.get(index);
-        if (item.retryTime > 3) {
-            // TODO
-        } else {
-            item.retryTime++;
+        ResourceItem item = resourceItems.get(index);
+        item.retryTime++;
+        if (item.retryTime >= RETRY_TIME) {
+            item.state = STATE_FAIL;
+            doneSize++;
+            next++;
         }
     }
 
     void setNextIndex(int next) {
+        if (next > size - 1) {
+            DownloadLogger.e("next out of bound", null);
+            next = 0;
+        }
         this.next = next;
     }
 
     int nextIndex() {
-        int result = next;
-
+        int result = -1;
         for (int i = 0; i < size; i++) {
-            int index = (next + size) % size;
-            Item item = list.get(index);
-            if (item.state != STATE_DONE) {
-                next = index;
+            int index = (next + i) % size;
+            ResourceItem item = resourceItems.get(index);
+            if (item.state == STATE_DOWNLOADING) {
+                return index;
             }
         }
-
         return result;
     }
 
@@ -62,12 +72,8 @@ class ResourceState {
         return doneSize == size;
     }
 
-    private static class Item {
+    private static class ResourceItem {
         int state = STATE_DOWNLOADING;
         int retryTime;
-
-        Item() {
-
-        }
     }
 }

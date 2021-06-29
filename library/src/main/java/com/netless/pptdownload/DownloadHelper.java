@@ -32,8 +32,8 @@ public class DownloadHelper {
         return this;
     }
 
-    public DownloadHelper setPPTCacheDir(String dirPath) {
-        File file = new File(dirPath);
+    public DownloadHelper setPPTCacheDir(String cacheDir) {
+        File file = new File(cacheDir);
         if (!file.exists()) {
             if (file.mkdirs()) {
                 DownloadLogger.d("mkdirs success");
@@ -46,7 +46,7 @@ public class DownloadHelper {
             throw new DownloadException("file should be directory");
         }
 
-        cacheDir = dirPath;
+        this.cacheDir = cacheDir;
         return this;
     }
 

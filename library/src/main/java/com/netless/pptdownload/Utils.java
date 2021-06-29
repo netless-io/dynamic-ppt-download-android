@@ -71,4 +71,8 @@ class Utils {
             osr.write(text);
         }
     }
+
+    public static boolean isEmpty(final CharSequence cs) {
+        return cs == null || cs.length() == 0;
+    }
 }

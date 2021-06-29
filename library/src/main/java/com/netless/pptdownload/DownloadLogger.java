@@ -2,6 +2,8 @@ package com.netless.pptdownload;
 
 import android.util.Log;
 
+import com.netless.pptdownload.library.BuildConfig;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -12,9 +14,9 @@ class DownloadLogger {
     private DownloadLogger() {
     }
 
-    private static final String TAG = "DownloadLogger";
+    private static final String TAG = "PptDownload";
 
-    static final boolean DEBUG = false;
+    static final boolean DEBUG = BuildConfig.DEBUG;
 
     public static void d(@NonNull String message) {
         if (DEBUG) {
@@ -24,6 +26,10 @@ class DownloadLogger {
 
     public static void i(@NonNull String message) {
         Log.i(TAG, message);
+    }
+
+    public static void e(@NonNull String message) {
+        Log.e(TAG, message);
     }
 
     public static void e(@NonNull String message, @Nullable Throwable throwable) {
