@@ -26,10 +26,7 @@ public class MainActivity extends AppCompatActivity {
         requestPermission();
     }
 
-
     private void startTask() {
-        // https://white-cn-doc-convert-dev.oss-cn-hangzhou.aliyuncs.com/dynamicConvert/1ef5d020c52511eba118edb06987914d/resources/resource1.zip
-        // https://white-cn-doc-convert-dev.oss-cn-hangzhou.aliyuncs.com/dynamicConvert/1ef5d020c52511eba118edb06987914d/layout.zip
         DownloadHelper helper = DownloadHelper.getInstance();
         helper.setDomain("https://white-cn-doc-convert.oss-cn-hangzhou.aliyuncs.com");
         helper.setPPTCacheDir(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath() + "/pptdownload");

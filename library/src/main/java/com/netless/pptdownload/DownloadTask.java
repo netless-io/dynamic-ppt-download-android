@@ -23,7 +23,6 @@ public class DownloadTask {
     private static final String SHARE_FILENAME = "share.json";
     private static final String RESOURCE_JOURNAL_FILENAME = "resource.journal";
     private static final String SHARE_RESOURCE_JOURNAL_FILENAME = "share_resource.journal";
-    private static final String DEFAULT_RESOURCE_DIRNAME = "resources";
 
     private final String taskUUID;
     private final String domain;
@@ -34,6 +33,16 @@ public class DownloadTask {
     private ResourceState resourceState;
     private ResourceState shareResourceState;
     private HashMap<Integer, ArrayList<ShareNode>> shareInfo;
+
+    private ResourceState.OnStateChangeListener onStateChangeListener = state -> {
+        if (state == resourceState) {
+            saveResourceState();
+        }
+
+        if (state == shareResourceState) {
+            saveShareResourceState();
+        }
+    };
 
     public DownloadTask(String taskUUID, String domain, String cacheDir) {
         this.taskUUID = taskUUID;
@@ -55,16 +64,20 @@ public class DownloadTask {
             return;
         }
 
-        File layoutDirTmp = new File(cacheDir, taskUUID + "_tmp");
-        if (!layoutDirTmp.isDirectory() && !layoutDirTmp.mkdir()) {
-            throw new DownloadException("create uuid dir tmp error");
-        }
-
         File layoutZip = new File(cacheDir, taskUUID + ".zip");
         downloader.downloadZipTo(getLayoutZipUrl(), layoutZip, new Downloader.DownloadCallback() {
             @Override
             public void onSuccess(String url, File desFile) {
-                unzipToTmp(desFile, layoutDirTmp);
+                // 创建临时解压目录
+                File layoutDirTmp = new File(cacheDir, taskUUID + "_tmp");
+
+                try {
+                    Utils.unzip(desFile, layoutDirTmp);
+                } catch (Exception e) {
+                    DownloadLogger.e("unzip layoutResource error");
+                    return;
+                }
+
                 if (layoutDirTmp.renameTo(layoutDir) && desFile.delete()) {
                     afterLayoutDownload();
                 } else {
@@ -74,24 +87,33 @@ public class DownloadTask {
 
             @Override
             public void onFailure(String url) {
-                DownloadLogger.e("download " + url + " error");
+                DownloadLogger.e("download layoutZip error, url " + url);
             }
         });
+    }
+
+    public boolean isStarted() {
+        return state != State.Init;
     }
 
     private void afterLayoutDownload() {
         DownloadLogger.d("[DownloadTask] afterLayoutDownload start");
         loadResourceState();
+        loadShareResourceInfo();
+        loadShareResourceState();
+
         downloadNextResource();
     }
 
     private void afterResourceDownload() {
         DownloadLogger.d("[DownloadTask] afterResourceDownload start");
-        loadShareResourceInfo();
-        loadShareResourceState();
+
         downloadNextShare();
     }
 
+    /**
+     * 加载 share.json 文件
+     */
     private void loadShareResourceInfo() {
         shareInfo = new HashMap<>();
         try {
@@ -119,6 +141,7 @@ public class DownloadTask {
         if (resourceState == null) {
             resourceState = new ResourceState(getPptPageSize());
         }
+        resourceState.setOnStateChangeListener(onStateChangeListener);
     }
 
     private void saveResourceState() {
@@ -146,6 +169,7 @@ public class DownloadTask {
         if (shareResourceState == null) {
             shareResourceState = new ResourceState(getPptPageSize());
         }
+        shareResourceState.setOnStateChangeListener(onStateChangeListener);
     }
 
     private void saveShareResourceState() {
@@ -156,10 +180,6 @@ public class DownloadTask {
         } catch (IOException e) {
             DownloadLogger.e("saveShareResourceState error");
         }
-    }
-
-    private boolean renameTmp(File tmp, File target) {
-        return tmp.renameTo(target);
     }
 
     private int getPptPageSize() {
@@ -197,7 +217,6 @@ public class DownloadTask {
                     resourceState.markFail(index);
                     DownloadLogger.d("downloadNextResource resource " + index + " fail");
                 }
-                saveResourceState();
                 downloadNextResource();
             }
 
@@ -226,29 +245,21 @@ public class DownloadTask {
 
     private void onShareResourceDownloadSuccess(int index) {
         shareResourceState.markDone(index);
-        saveShareResourceState();
         downloadNextShare();
     }
 
     private void onShareResourceDownloadFailure(int index) {
         shareResourceState.markFail(index);
-        saveShareResourceState();
         downloadNextShare();
-    }
-
-    private void unzipToTmp(File desFile, File layoutDirTmp) {
-        try {
-            Utils.unzip(desFile, layoutDirTmp);
-        } catch (Exception e) {
-            state = State.Fail;
-        }
     }
 
     /**
      * @param index 从0开始的所有
      */
     public void onPageChangeTo(int index) {
+        resourceState.setNextIndex(index + 1);
 
+        shareResourceState.setNextIndex(index + 1);
     }
 
     String getLayoutZipUrl() {
@@ -323,12 +334,11 @@ public class DownloadTask {
                 return;
             }
             File targetTmp = new File(new File(cacheDir, taskUUID), getShareResourcePath(shareNodes.get(index).name) + ".tmp");
-            downloader.downloadZipTo(getShareResourceUrl(shareNodes.get(index).name), targetTmp, new Downloader.DownloadCallback() {
+            downloader.downloadBigFile(getShareResourceUrl(shareNodes.get(index).name), targetTmp, new Downloader.DownloadCallback() {
                 @Override
                 public void onSuccess(String url, File desFile) {
                     if (desFile.renameTo(target)) {
                         DownloadLogger.d("[ShareResourceDownloader] downloadNext resource " + index);
-
                         index++;
                         downloadNext();
                     } else {

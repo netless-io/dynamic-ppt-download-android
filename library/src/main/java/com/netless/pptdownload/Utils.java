@@ -31,7 +31,7 @@ class Utils {
                 FileOutputStream fout = new FileOutputStream(file);
                 try {
                     int count;
-                    byte[] buffer = new byte[8192];
+                    byte[] buffer = new byte[DEFAULT_BUFFER_SIZE];
                     while ((count = zis.read(buffer)) != -1) {
                         fout.write(buffer, 0, count);
                     }
