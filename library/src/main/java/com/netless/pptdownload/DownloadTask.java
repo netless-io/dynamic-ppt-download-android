@@ -24,6 +24,8 @@ public class DownloadTask {
     private static final String RESOURCE_JOURNAL_FILENAME = "resource.journal";
     private static final String SHARE_RESOURCE_JOURNAL_FILENAME = "share_resource.journal";
 
+    private static final int NO_SIZE = -1;
+
     private final String taskUUID;
     private final String domain;
     private final String cacheDir;
@@ -33,6 +35,7 @@ public class DownloadTask {
     private ResourceState resourceState;
     private ResourceState shareResourceState;
     private HashMap<Integer, ArrayList<ShareNode>> shareInfo;
+    private int pptPageSize = NO_SIZE;
 
     private ResourceState.OnStateChangeListener onStateChangeListener = state -> {
         if (state == resourceState) {
@@ -60,6 +63,7 @@ public class DownloadTask {
 
         File layoutDir = new File(cacheDir, taskUUID);
         if (layoutDir.exists()) {
+            DownloadLogger.i("[DownloadTask] layout dir existed");
             afterLayoutDownload();
             return;
         }
@@ -74,20 +78,20 @@ public class DownloadTask {
                 try {
                     Utils.unzip(desFile, layoutDirTmp);
                 } catch (Exception e) {
-                    DownloadLogger.e("unzip layoutResource error");
+                    DownloadLogger.e("[DownloadTask] unzip layout resource error");
                     return;
                 }
 
                 if (layoutDirTmp.renameTo(layoutDir) && desFile.delete()) {
                     afterLayoutDownload();
                 } else {
-                    DownloadLogger.e("rename layout tmp error");
+                    DownloadLogger.e("[DownloadTask] rename layout tmp error");
                 }
             }
 
             @Override
             public void onFailure(String url) {
-                DownloadLogger.e("download layoutZip error, url " + url);
+                DownloadLogger.e("[DownloadTask] download layout zip error, url " + url);
             }
         });
     }
@@ -127,26 +131,45 @@ public class DownloadTask {
     }
 
     private void loadResourceState() {
-        File resourceJournal = new File(new File(cacheDir, taskUUID), RESOURCE_JOURNAL_FILENAME);
+        resourceState = loadStateFromFile(RESOURCE_JOURNAL_FILENAME);
+        resourceState.setOnStateChangeListener(onStateChangeListener);
+    }
+
+    private void saveResourceState() {
+        saveStateToFile(resourceState, RESOURCE_JOURNAL_FILENAME);
+    }
+
+    private void loadShareResourceState() {
+        shareResourceState = loadStateFromFile(SHARE_RESOURCE_JOURNAL_FILENAME);
+        shareResourceState.setOnStateChangeListener(onStateChangeListener);
+    }
+
+    private void saveShareResourceState() {
+        saveStateToFile(shareResourceState, SHARE_RESOURCE_JOURNAL_FILENAME);
+    }
+
+    private ResourceState loadStateFromFile(String journalFile) {
+        ResourceState result = null;
+        File resourceJournal = new File(new File(cacheDir, taskUUID), journalFile);
         if (resourceJournal.exists()) {
             try {
                 String text = Utils.readFileToString(resourceJournal);
                 if (!Utils.isEmpty(text)) {
-                    resourceState = new Gson().fromJson(text, ResourceState.class);
+                    result = new Gson().fromJson(text, ResourceState.class);
                 }
             } catch (Exception e) {
                 DownloadLogger.e("loadResourceState error");
             }
         }
-        if (resourceState == null) {
-            resourceState = new ResourceState(getPptPageSize());
+        if (result == null) {
+            result = new ResourceState(getPptPageSize());
         }
-        resourceState.setOnStateChangeListener(onStateChangeListener);
+        return result;
     }
 
-    private void saveResourceState() {
-        File resourceJournal = new File(new File(cacheDir, taskUUID), RESOURCE_JOURNAL_FILENAME);
-        String text = new Gson().toJson(resourceState);
+    private void saveStateToFile(ResourceState state, String journalFile) {
+        File resourceJournal = new File(new File(cacheDir, taskUUID), journalFile);
+        String text = new Gson().toJson(state);
         try {
             Utils.writeStringToFile(text, resourceJournal);
         } catch (IOException e) {
@@ -154,43 +177,21 @@ public class DownloadTask {
         }
     }
 
-    private void loadShareResourceState() {
-        File resourceJournal = new File(new File(cacheDir, taskUUID), SHARE_RESOURCE_JOURNAL_FILENAME);
-        if (resourceJournal.exists()) {
-            try {
-                String text = Utils.readFileToString(resourceJournal);
-                if (!Utils.isEmpty(text)) {
-                    shareResourceState = new Gson().fromJson(text, ResourceState.class);
-                }
-            } catch (Exception e) {
-                DownloadLogger.e("loadShareResourceState error");
-            }
-        }
-        if (shareResourceState == null) {
-            shareResourceState = new ResourceState(getPptPageSize());
-        }
-        shareResourceState.setOnStateChangeListener(onStateChangeListener);
-    }
-
-    private void saveShareResourceState() {
-        File resourceJournal = new File(new File(cacheDir, taskUUID), SHARE_RESOURCE_JOURNAL_FILENAME);
-        String state = new Gson().toJson(shareResourceState);
-        try {
-            Utils.writeStringToFile(state, resourceJournal);
-        } catch (IOException e) {
-            DownloadLogger.e("saveShareResourceState error");
-        }
-    }
-
     private int getPptPageSize() {
+        if (pptPageSize != NO_SIZE) {
+            return pptPageSize;
+        }
+
         File infoFile = new File(new File(cacheDir, taskUUID), INFO_FILENAME);
         try {
             String info = Utils.readFileToString(infoFile);
             JSONObject object = new JSONObject(info);
-            return object.optInt("totalPageSize", -1);
+            pptPageSize = object.optInt("totalPageSize", NO_SIZE);
         } catch (Exception e) {
-            return -1;
+            DownloadLogger.e("[DownloadTask] parse pptPageSize error");
         }
+
+        return pptPageSize;
     }
 
     private void downloadNextResource() {
@@ -236,11 +237,12 @@ public class DownloadTask {
 
         int index = shareResourceState.nextIndex();
         DownloadLogger.i("[DownloadTask] downloadNextShare start " + index);
-        if (shareInfo.get(index + 1) == null) {
+        ArrayList<ShareNode> shareNodeList = getShareNodeList(index);
+        if (shareNodeList == null) {
             onShareResourceDownloadSuccess(index);
             return;
         }
-        new ShareResourceDownloader(index, shareInfo.get(index + 1)).download();
+        new ShareResourceDownloader(index, shareNodeList).download();
     }
 
     private void onShareResourceDownloadSuccess(int index) {
@@ -258,7 +260,7 @@ public class DownloadTask {
      */
     public void onPageChangeTo(int index) {
         resourceState.setNextIndex(index + 1);
-
+        // TODO
         shareResourceState.setNextIndex(index + 1);
     }
 
@@ -294,6 +296,10 @@ public class DownloadTask {
 
     String getShareResourceUrl(String name) {
         return domain + "/" + name;
+    }
+
+    ArrayList<ShareNode> getShareNodeList(int index) {
+        return shareInfo.get(index + 1);
     }
 
     enum State {
