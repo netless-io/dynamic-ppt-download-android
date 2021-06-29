@@ -24,7 +24,7 @@ class ResourceState {
 
     private ArrayList<Item> items;
 
-    private OnStateChangeListener onStateChangeListener;
+    private transient OnStateChangeListener onStateChangeListener;
 
     ResourceState(int size) {
         this.size = size;
