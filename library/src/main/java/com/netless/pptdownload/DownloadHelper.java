@@ -73,7 +73,7 @@ public class DownloadHelper {
         SceneState sceneState = state.getSceneState();
         if (sceneState != null && sceneState.getScenes() != null) {
             Scene s = sceneState.getScenes()[sceneState.getIndex()];
-            if (s.getPpt() != null && "pptx".startsWith(s.getPpt().getSrc())) {
+            if (s.getPpt() != null && s.getPpt().getSrc().startsWith("pptx")) {
                 String src = s.getPpt().getSrc();
                 String uuid = getUUIDFromSrc(src);
                 String domain = getDomainFromSrc(src);
