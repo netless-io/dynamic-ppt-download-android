@@ -8,7 +8,7 @@ import java.util.ArrayList;
 class ResourceState {
     private static final int RETRY_TIME = 3;
 
-    private static final int STATE_DOWNLOADING = 0;
+    private static final int STATE_PENDING = 0;
     private static final int STATE_DONE = 1;
     private static final int STATE_FAIL = 2;
 
@@ -51,7 +51,9 @@ class ResourceState {
         if (item.retryTime >= RETRY_TIME) {
             item.state = STATE_FAIL;
             doneSize++;
-            next++;
+            if (index == next) {
+                next++;
+            }
         }
 
         if (onStateChangeListener != null) {
@@ -60,11 +62,7 @@ class ResourceState {
     }
 
     void setNextIndex(int index) {
-        if (index > size - 1) {
-            DownloadLogger.e("next out of bound", null);
-            index = 0;
-        }
-        this.next = index;
+        this.next = index % size;
 
         if (onStateChangeListener == null) {
             onStateChangeListener.onStateChange(this);
@@ -75,7 +73,7 @@ class ResourceState {
         for (int i = 0; i < size; i++) {
             int index = (next + i) % size;
             Item item = items.get(index);
-            if (item.state == STATE_DOWNLOADING) {
+            if (item.state == STATE_PENDING) {
                 return index;
             }
         }
@@ -87,7 +85,7 @@ class ResourceState {
     }
 
     private static class Item {
-        int state = STATE_DOWNLOADING;
+        int state = STATE_PENDING;
         int retryTime;
     }
 

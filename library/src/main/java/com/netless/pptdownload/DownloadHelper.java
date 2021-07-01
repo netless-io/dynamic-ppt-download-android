@@ -41,7 +41,7 @@ public class DownloadHelper {
             if (file.mkdirs()) {
                 DownloadLogger.d("[DownloadHelper] mkdirs success");
             } else {
-                DownloadLogger.e("[DownloadHelper] mkdirs error", null);
+                DownloadLogger.e("[DownloadHelper] mkdirs error");
             }
         }
 
@@ -69,7 +69,7 @@ public class DownloadHelper {
         return task;
     }
 
-    public void updateRoomState(RoomState state) {
+    public static void updateRoomState(RoomState state) {
         SceneState sceneState = state.getSceneState();
         if (sceneState != null && sceneState.getScenes() != null) {
             Scene s = sceneState.getScenes()[sceneState.getIndex()];
@@ -78,10 +78,11 @@ public class DownloadHelper {
                 String uuid = getUUIDFromSrc(src);
                 String domain = getDomainFromSrc(src);
 
-                DownloadTask task = newTask(uuid, domain);
+                DownloadTask task = DownloadHelper.getInstance().newTask(uuid, domain);
                 if (!task.isStarted()) {
                     task.start();
                 }
+                task.onPageChangeTo(sceneState.getIndex());
             }
         }
     }
@@ -90,7 +91,7 @@ public class DownloadHelper {
      * @param src startWith pptx etc."pptx://cover.herewhite.com/dfafdad/dynamicConvert/6a212c90fa5311ea8b9c074232aaccd4/1.slide"
      * @return
      */
-    String getDomainFromSrc(String src) {
+    static String getDomainFromSrc(String src) {
         int index = src.indexOf("/dynamicConvert/");
         if (index != -1) {
             return "https://" + src.substring("pptx://".length(), index);
@@ -99,7 +100,7 @@ public class DownloadHelper {
         }
     }
 
-    String getUUIDFromSrc(String src) {
+    static String getUUIDFromSrc(String src) {
         int index = src.indexOf("/dynamicConvert/");
         int start = index + "/dynamicConvert/".length();
         int end = src.lastIndexOf('/');

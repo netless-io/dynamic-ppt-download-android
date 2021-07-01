@@ -35,6 +35,7 @@ public class DownloadTask {
     private ResourceState resourceState;
     private ResourceState shareResourceState;
     private HashMap<Integer, ArrayList<ShareNode>> shareInfo;
+    private ShareResourceDownloader currentShareDownloader;
     private int pptPageSize = NO_SIZE;
 
     private ResourceState.OnStateChangeListener onStateChangeListener = state -> {
@@ -69,7 +70,7 @@ public class DownloadTask {
         }
 
         File layoutZip = new File(cacheDir, taskUUID + ".zip");
-        downloader.downloadZipTo(getLayoutZipUrl(), layoutZip, new Downloader.DownloadCallback() {
+        downloader.downloadToFile(getLayoutZipUrl(), layoutZip, new Downloader.DownloadCallback() {
             @Override
             public void onSuccess(String url, File desFile) {
                 // 创建临时解压目录
@@ -101,16 +102,22 @@ public class DownloadTask {
     }
 
     private void afterLayoutDownload() {
-        DownloadLogger.d("[DownloadTask] afterLayoutDownload start");
-        loadResourceState();
-        loadShareResourceInfo();
-        loadShareResourceState();
+        DownloadLogger.d("[DownloadTask] afterLayoutDownload");
+        synchronized (this) {
+            if (getPptPageSize() == NO_SIZE) {
+                DownloadLogger.e("[DownloadTask] pptPageSize error");
+                return;
+            }
+            loadResourceState();
+            loadShareResourceInfo();
+            loadShareResourceState();
+        }
 
         downloadNextResource();
     }
 
     private void afterResourceDownload() {
-        DownloadLogger.d("[DownloadTask] afterResourceDownload start");
+        DownloadLogger.d("[DownloadTask] afterResourceDownload");
 
         downloadNextShare();
     }
@@ -205,7 +212,7 @@ public class DownloadTask {
         if (resourceZip.exists()) {
             resourceZip.delete();
         }
-        downloader.downloadZipTo(getResourceZipUrl(index), resourceZip, new Downloader.DownloadCallback() {
+        downloader.downloadToFile(getResourceZipUrl(index), resourceZip, new Downloader.DownloadCallback() {
             @Override
             public void onSuccess(String url, File desFile) {
                 try {
@@ -231,6 +238,7 @@ public class DownloadTask {
 
     private void downloadNextShare() {
         if (shareResourceState.isAllDone()) {
+            DownloadLogger.i("[DownloadTask] All Download Finish");
             state = State.SUCCESS;
             return;
         }
@@ -242,7 +250,8 @@ public class DownloadTask {
             onShareResourceDownloadSuccess(index);
             return;
         }
-        new ShareResourceDownloader(index, shareNodeList).download();
+        currentShareDownloader = new ShareResourceDownloader(index, shareNodeList);
+        currentShareDownloader.download();
     }
 
     private void onShareResourceDownloadSuccess(int index) {
@@ -259,9 +268,16 @@ public class DownloadTask {
      * @param index 从0开始的所有
      */
     public void onPageChangeTo(int index) {
-        resourceState.setNextIndex(index + 1);
-        // TODO
-        shareResourceState.setNextIndex(index + 1);
+        synchronized (this) {
+            if (index >= getPptPageSize()) {
+                // download next page resource
+                resourceState.setNextIndex(index + 1);
+                shareResourceState.setNextIndex(index + 1);
+                if (currentShareDownloader != null) {
+                    currentShareDownloader.cancel();
+                }
+            }
+        }
     }
 
     String getLayoutZipUrl() {
@@ -328,6 +344,10 @@ public class DownloadTask {
             downloadNext();
         }
 
+        public void cancel() {
+            downloader.cancel(getShareResourceUrl(shareNodes.get(index).name));
+        }
+
         private void downloadNext() {
             if (index >= size) {
                 onShareResourceDownloadSuccess(shareResourceIndex);
@@ -340,7 +360,7 @@ public class DownloadTask {
                 return;
             }
             File targetTmp = new File(new File(cacheDir, taskUUID), getShareResourcePath(shareNodes.get(index).name) + ".tmp");
-            downloader.downloadBigFile(getShareResourceUrl(shareNodes.get(index).name), targetTmp, new Downloader.DownloadCallback() {
+            downloader.downloadToFile(getShareResourceUrl(shareNodes.get(index).name), targetTmp, new Downloader.DownloadCallback() {
                 @Override
                 public void onSuccess(String url, File desFile) {
                     if (desFile.renameTo(target)) {

@@ -7,6 +7,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.util.zip.ZipEntry;
@@ -16,8 +17,7 @@ class Utils {
     private static final int DEFAULT_BUFFER_SIZE = 8192;
 
     static void unzip(File zipFile, File targetDirectory) throws IOException {
-        ZipInputStream zis = new ZipInputStream(new BufferedInputStream(new FileInputStream(zipFile)));
-        try {
+        try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(new FileInputStream(zipFile)))) {
             ZipEntry ze;
             while ((ze = zis.getNextEntry()) != null) {
                 File file = new File(targetDirectory, ze.getName());
@@ -28,19 +28,8 @@ class Utils {
                 if (ze.isDirectory()) {
                     continue;
                 }
-                FileOutputStream fout = new FileOutputStream(file);
-                try {
-                    int count;
-                    byte[] buffer = new byte[DEFAULT_BUFFER_SIZE];
-                    while ((count = zis.read(buffer)) != -1) {
-                        fout.write(buffer, 0, count);
-                    }
-                } finally {
-                    fout.close();
-                }
+                copyToFile(zis, file);
             }
-        } finally {
-            zis.close();
         }
     }
 
@@ -69,6 +58,16 @@ class Utils {
     public static void writeStringToFile(String text, File file) throws IOException {
         try (OutputStreamWriter osr = new OutputStreamWriter(new FileOutputStream(file), "UTF-8")) {
             osr.write(text);
+        }
+    }
+
+    public static void copyToFile(InputStream inputStream, File file) throws IOException {
+        byte[] buffer = new byte[DEFAULT_BUFFER_SIZE];
+        try (FileOutputStream fos = new FileOutputStream(file, false)) {
+            int n;
+            while (-1 != (n = inputStream.read(buffer))) {
+                fos.write(buffer, 0, n);
+            }
         }
     }
 
