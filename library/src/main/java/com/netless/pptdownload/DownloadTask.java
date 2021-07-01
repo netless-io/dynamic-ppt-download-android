@@ -275,7 +275,7 @@ public class DownloadTask {
     public void onPageChangeTo(int index) {
         try {
             synchronized (this) {
-                if (index <= getPptPageSize()) {
+                if (index <= pptPageSize) {
                     resourceState.setNextIndex(index + 1);
                     shareResourceState.setNextIndex(index + 1);
                     if (currentShareDownloader != null) {
