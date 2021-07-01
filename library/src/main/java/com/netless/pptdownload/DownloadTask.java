@@ -18,9 +18,9 @@ import java.util.HashMap;
  * taskUUID
  */
 public class DownloadTask {
-    private static final String DEFAULT_LAYOUT_FILENAME = "layout.zip";
+    private static final String DEFAULT_LAYOUT_FILENAME = "presentationML.zip";
     private static final String INFO_FILENAME = "info.json";
-    private static final String SHARE_FILENAME = "share.json";
+    private static final String SHARE_FILENAME = "bigFile.json";
     private static final String RESOURCE_JOURNAL_FILENAME = "resource.journal";
     private static final String SHARE_RESOURCE_JOURNAL_FILENAME = "share_resource.journal";
 
@@ -32,7 +32,9 @@ public class DownloadTask {
     private final Downloader downloader;
 
     private State state = State.Init;
+    // 基础资源文件
     private ResourceState resourceState;
+    // 分享及大文件资源状态
     private ResourceState shareResourceState;
     private HashMap<Integer, ArrayList<ShareNode>> shareInfo;
     private ShareResourceDownloader currentShareDownloader;
@@ -80,6 +82,7 @@ public class DownloadTask {
                     Utils.unzip(desFile, layoutDirTmp);
                 } catch (Exception e) {
                     DownloadLogger.e("[DownloadTask] unzip layout resource error");
+                    state = State.Fail;
                     return;
                 }
 
@@ -87,12 +90,14 @@ public class DownloadTask {
                     afterLayoutDownload();
                 } else {
                     DownloadLogger.e("[DownloadTask] rename layout tmp error");
+                    state = State.Fail;
                 }
             }
 
             @Override
             public void onFailure(String url) {
                 DownloadLogger.e("[DownloadTask] download layout zip error, url " + url);
+                state = State.Fail;
             }
         });
     }
@@ -268,15 +273,18 @@ public class DownloadTask {
      * @param index 从0开始的所有
      */
     public void onPageChangeTo(int index) {
-        synchronized (this) {
-            if (index >= getPptPageSize()) {
-                // download next page resource
-                resourceState.setNextIndex(index + 1);
-                shareResourceState.setNextIndex(index + 1);
-                if (currentShareDownloader != null) {
-                    currentShareDownloader.cancel();
+        try {
+            synchronized (this) {
+                if (index <= getPptPageSize()) {
+                    resourceState.setNextIndex(index + 1);
+                    shareResourceState.setNextIndex(index + 1);
+                    if (currentShareDownloader != null) {
+                        currentShareDownloader.cancel();
+                    }
                 }
             }
+        } catch (Exception e) {
+            DownloadLogger.e("onPageChangeTo error");
         }
     }
 
@@ -331,13 +339,11 @@ public class DownloadTask {
     class ShareResourceDownloader {
         private final ArrayList<ShareNode> shareNodes;
         private final int shareResourceIndex;
-        private final int size;
         private int index = 0;
 
         ShareResourceDownloader(int index, ArrayList<ShareNode> shareNodes) {
             this.shareResourceIndex = index;
             this.shareNodes = shareNodes;
-            size = shareNodes.size();
         }
 
         public void download() {
@@ -345,11 +351,14 @@ public class DownloadTask {
         }
 
         public void cancel() {
+            if (index >= shareNodes.size()) {
+                return;
+            }
             downloader.cancel(getShareResourceUrl(shareNodes.get(index).name));
         }
 
         private void downloadNext() {
-            if (index >= size) {
+            if (index >= shareNodes.size()) {
                 onShareResourceDownloadSuccess(shareResourceIndex);
                 return;
             }
