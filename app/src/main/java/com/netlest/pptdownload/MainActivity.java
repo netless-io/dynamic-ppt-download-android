@@ -31,7 +31,7 @@ public class MainActivity extends AppCompatActivity {
         helper.setDomain("https://white-cn-doc-convert.oss-cn-hangzhou.aliyuncs.com");
         helper.setPPTCacheDir(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath() + "/pptdownload");
 
-        DownloadTask task = helper.newTask("a6f9d430d7c211ebae6f1dc0589306eb");
+        DownloadTask task = helper.newTask("a6f9d430d7c211ebae6f1dc0589306eb", "https://white-cn-doc-convert.oss-cn-hangzhou.aliyuncs.com");
         task.start();
     }
 
